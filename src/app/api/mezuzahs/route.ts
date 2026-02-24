@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFile, putFile } from '@/lib/github';
 import { parseMezuzahsFile, generateMezuzahsFile } from '@/lib/mezuzahs';
+import { sendSubmittedEmail } from '@/lib/email';
 import { Mezuzah } from '@/types/mezuzah';
 
 const FILE_PATH = 'data/mezuzahs.js';
@@ -19,7 +20,7 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json() as { mezuzahs: Mezuzah[] };
+    const body = await req.json() as { mezuzahs: Mezuzah[]; changeDescription?: string };
 
     // Fetch current SHA (required by GitHub for updates)
     const file = await getFile(FILE_PATH);
@@ -33,6 +34,10 @@ export async function PUT(req: NextRequest) {
       file.sha,
       'Update mezuzah collection via admin panel'
     );
+
+    // Send "submitted" notification — fire and forget (don't block save response)
+    const desc = body.changeDescription ?? `${body.mezuzahs.length} mezuzah(s) in collection`;
+    sendSubmittedEmail(desc).catch((e) => console.warn('Email send failed:', e));
 
     return NextResponse.json({ ok: true });
   } catch (err) {

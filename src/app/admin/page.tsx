@@ -44,12 +44,12 @@ export default function AdminPage() {
     loadMezuzahs();
   }, [loadMezuzahs]);
 
-  async function saveAll(updated: Mezuzah[]) {
+  async function saveAll(updated: Mezuzah[], changeDescription?: string) {
     setSaving(true);
     const res = await fetch('/api/mezuzahs', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mezuzahs: updated }),
+      body: JSON.stringify({ mezuzahs: updated, changeDescription }),
     });
     setSaving(false);
 
@@ -64,19 +64,19 @@ export default function AdminPage() {
   }
 
   function handleAdd(m: Mezuzah) {
-    // New arrivals go to the front of the list
-    saveAll([m, ...mezuzahs]);
+    saveAll([m, ...mezuzahs], `Added "${m.name}" ($${m.price})`);
   }
 
   function handleEdit(index: number, m: Mezuzah) {
     const updated = [...mezuzahs];
     updated[index] = m;
-    saveAll(updated);
+    saveAll(updated, `Updated "${m.name}" ($${m.price})`);
   }
 
   function handleDelete(index: number) {
+    const name = mezuzahs[index].name;
     const updated = mezuzahs.filter((_, i) => i !== index);
-    saveAll(updated);
+    saveAll(updated, `Removed "${name}" from collection`);
   }
 
   async function handleLogout() {
@@ -88,21 +88,55 @@ export default function AdminPage() {
   const deletingMezuzah = mode.type === 'delete' ? mezuzahs[mode.index] : undefined;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur border-b sticky top-0 z-10">
+    <div className="min-h-screen">
+      {/* Glass header */}
+      <header
+        className="sticky top-0 z-10 border-b"
+        style={{
+          background: 'rgba(255,255,255,0.72)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderColor: 'rgba(255,255,255,0.85)',
+          boxShadow: '0 2px 12px rgba(30,100,180,0.10)',
+        }}
+      >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="font-semibold text-slate-800 text-lg leading-tight">
-              ✡ Made in Heaven Mezuzahs
+            <h1
+              className="text-xl leading-tight"
+              style={{ fontFamily: 'var(--font-caveat), cursive', color: '#1e3a58', fontWeight: 700 }}
+            >
+              ✡ Made in <span style={{ color: '#1a7fd4' }}>Heaven</span> Mezuzahs
             </h1>
-            <p className="text-xs text-muted-foreground">Admin Panel</p>
+            <p
+              className="text-xs tracking-widest uppercase"
+              style={{ fontFamily: 'var(--font-playfair), serif', color: '#3d6a96' }}
+            >
+              Admin Panel
+            </p>
           </div>
           <div className="flex gap-2 items-center">
-            <Button size="sm" onClick={() => setMode({ type: 'add' })}>
+            <Button
+              size="sm"
+              onClick={() => setMode({ type: 'add' })}
+              style={{
+                fontFamily: 'var(--font-playfair), serif',
+                background: 'linear-gradient(135deg, #4499d4, #2277bb)',
+                border: 'none',
+                boxShadow: '0 2px 10px rgba(34,119,187,0.30)',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+              }}
+            >
               + Add Mezuzah
             </Button>
-            <Button size="sm" variant="ghost" onClick={handleLogout} className="text-slate-500">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleLogout}
+              className="text-slate-500"
+              style={{ fontFamily: 'var(--font-playfair), serif' }}
+            >
               Sign Out
             </Button>
           </div>
@@ -111,10 +145,18 @@ export default function AdminPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         {loading ? (
-          <div className="text-center py-24 text-muted-foreground">Loading collection…</div>
+          <div
+            className="text-center py-24"
+            style={{ fontFamily: 'var(--font-playfair), serif', color: '#3d6a96' }}
+          >
+            Loading collection…
+          </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-6">
+            <p
+              className="text-sm mb-6"
+              style={{ fontFamily: 'var(--font-playfair), serif', color: '#3d6a96' }}
+            >
               {mezuzahs.length} mezuzah{mezuzahs.length !== 1 ? 's' : ''} in the collection.
               Changes go live on the website within ~1–2 minutes of saving.
             </p>
@@ -134,9 +176,14 @@ export default function AdminPage() {
 
       {/* Add Dialog */}
       <Dialog open={mode.type === 'add'} onOpenChange={(open) => !open && setMode({ type: 'idle' })}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(16px)' }}
+        >
           <DialogHeader>
-            <DialogTitle>Add New Mezuzah</DialogTitle>
+            <DialogTitle style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}>
+              Add New Mezuzah
+            </DialogTitle>
           </DialogHeader>
           <MezuzahForm
             onSave={handleAdd}
@@ -151,9 +198,14 @@ export default function AdminPage() {
         open={mode.type === 'edit'}
         onOpenChange={(open) => !open && setMode({ type: 'idle' })}
       >
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(16px)' }}
+        >
           <DialogHeader>
-            <DialogTitle>Edit Mezuzah</DialogTitle>
+            <DialogTitle style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}>
+              Edit Mezuzah
+            </DialogTitle>
           </DialogHeader>
           {editingMezuzah && (
             <MezuzahForm
@@ -171,9 +223,14 @@ export default function AdminPage() {
         open={mode.type === 'delete'}
         onOpenChange={(open) => !open && setMode({ type: 'idle' })}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent
+          className="max-w-sm"
+          style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(16px)' }}
+        >
           <DialogHeader>
-            <DialogTitle>Delete Mezuzah</DialogTitle>
+            <DialogTitle style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}>
+              Delete Mezuzah
+            </DialogTitle>
             <DialogDescription>
               Are you sure you want to remove <strong>{deletingMezuzah?.name}</strong> from the
               collection? This will update the live website.
