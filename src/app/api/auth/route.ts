@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
   cookieStore.set('admin_session', '1', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: true,
+    sameSite: 'none', // required for cross-origin iframe (madeinheavenmezuzahs.com embeds admin)
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: '/',
   });
@@ -27,6 +27,12 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE() {
   const cookieStore = await cookies();
-  cookieStore.delete('admin_session');
+  cookieStore.set('admin_session', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    maxAge: 0,
+    path: '/',
+  });
   return NextResponse.json({ ok: true });
 }
