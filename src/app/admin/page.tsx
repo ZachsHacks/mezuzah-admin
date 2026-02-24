@@ -3,8 +3,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mezuzah } from '@/types/mezuzah';
+import { SiteContent } from '@/types/site-content';
 import MezuzahCard from '@/components/MezuzahCard';
 import MezuzahForm from '@/components/MezuzahForm';
+import AboutEditor from '@/components/AboutEditor';
+import ContactEditor from '@/components/ContactEditor';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,33 +19,53 @@ import {
 import { toast } from 'sonner';
 
 type Mode = { type: 'idle' } | { type: 'add' } | { type: 'edit'; index: number } | { type: 'delete'; index: number };
+type Tab = 'collection' | 'about' | 'contact';
+
+const TAB_LABELS: { id: Tab; label: string }[] = [
+  { id: 'collection', label: 'Collection' },
+  { id: 'about',      label: 'About Page' },
+  { id: 'contact',    label: 'Contact Page' },
+];
 
 export default function AdminPage() {
-  const [mezuzahs, setMezuzahs] = useState<Mezuzah[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState<Mode>({ type: 'idle' });
+  const [mezuzahs, setMezuzahs]       = useState<Mezuzah[]>([]);
+  const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [mode, setMode]               = useState<Mode>({ type: 'idle' });
+  const [tab, setTab]                 = useState<Tab>('collection');
   const router = useRouter();
 
-  const loadMezuzahs = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/mezuzahs');
-    if (res.status === 401) {
+    const [mRes, cRes] = await Promise.all([
+      fetch('/api/mezuzahs'),
+      fetch('/api/site-content'),
+    ]);
+
+    if (mRes.status === 401 || cRes.status === 401) {
       router.push('/');
       return;
     }
-    if (res.ok) {
-      const { mezuzahs: data } = await res.json();
+
+    if (mRes.ok) {
+      const { mezuzahs: data } = await mRes.json();
       setMezuzahs(data);
     } else {
-      toast.error('Failed to load mezuzahs');
+      toast.error('Failed to load collection');
     }
+
+    if (cRes.ok) {
+      const { siteContent: data } = await cRes.json();
+      setSiteContent(data);
+    } else {
+      toast.error('Failed to load page content');
+    }
+
     setLoading(false);
   }, [router]);
 
-  useEffect(() => {
-    loadMezuzahs();
-  }, [loadMezuzahs]);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   async function saveAll(updated: Mezuzah[], changeDescription?: string) {
     setSaving(true);
@@ -84,7 +107,7 @@ export default function AdminPage() {
     router.push('/');
   }
 
-  const editingMezuzah = mode.type === 'edit' ? mezuzahs[mode.index] : undefined;
+  const editingMezuzah  = mode.type === 'edit'   ? mezuzahs[mode.index] : undefined;
   const deletingMezuzah = mode.type === 'delete' ? mezuzahs[mode.index] : undefined;
 
   return (
@@ -116,20 +139,22 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex gap-2 items-center">
-            <Button
-              size="sm"
-              onClick={() => setMode({ type: 'add' })}
-              style={{
-                fontFamily: 'var(--font-playfair), serif',
-                background: 'linear-gradient(135deg, #4499d4, #2277bb)',
-                border: 'none',
-                boxShadow: '0 2px 10px rgba(34,119,187,0.30)',
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-              }}
-            >
-              + Add Mezuzah
-            </Button>
+            {tab === 'collection' && (
+              <Button
+                size="sm"
+                onClick={() => setMode({ type: 'add' })}
+                style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  background: 'linear-gradient(135deg, #4499d4, #2277bb)',
+                  border: 'none',
+                  boxShadow: '0 2px 10px rgba(34,119,187,0.30)',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                }}
+              >
+                + Add Mezuzah
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -141,6 +166,31 @@ export default function AdminPage() {
             </Button>
           </div>
         </div>
+
+        {/* Tab bar */}
+        <div className="max-w-6xl mx-auto px-4 flex gap-1">
+          {TAB_LABELS.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              style={{
+                fontFamily: 'var(--font-playfair), serif',
+                fontSize: '0.85rem',
+                fontWeight: tab === id ? 700 : 500,
+                color: tab === id ? '#1a7fd4' : '#3d6a96',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: tab === id ? '2px solid #1a7fd4' : '2px solid transparent',
+                padding: '8px 16px',
+                marginBottom: '-1px',
+                cursor: 'pointer',
+                transition: 'color 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
@@ -149,27 +199,100 @@ export default function AdminPage() {
             className="text-center py-24"
             style={{ fontFamily: 'var(--font-playfair), serif', color: '#3d6a96' }}
           >
-            Loading collection…
+            Loading…
           </div>
         ) : (
           <>
-            <p
-              className="text-sm mb-6"
-              style={{ fontFamily: 'var(--font-playfair), serif', color: '#3d6a96' }}
-            >
-              {mezuzahs.length} mezuzah{mezuzahs.length !== 1 ? 's' : ''} in the collection.
-              Changes go live on the website within ~1–2 minutes of saving.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-              {mezuzahs.map((m, i) => (
-                <MezuzahCard
-                  key={`${m.name}-${i}`}
-                  mezuzah={m}
-                  onEdit={() => setMode({ type: 'edit', index: i })}
-                  onDelete={() => setMode({ type: 'delete', index: i })}
+            {/* ── Collection tab ─────────────────────────────────────────── */}
+            {tab === 'collection' && (
+              <>
+                {/* Readable info pill */}
+                <div
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm mb-6"
+                  style={{
+                    background: 'rgba(255,255,255,0.80)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255,255,255,0.90)',
+                    fontFamily: 'var(--font-playfair), serif',
+                    color: '#2d5070',
+                    boxShadow: '0 2px 8px rgba(30,100,180,0.10)',
+                  }}
+                >
+                  <span style={{ color: '#1a7fd4' }}>✡</span>
+                  <strong>{mezuzahs.length}</strong>&nbsp;mezuzah{mezuzahs.length !== 1 ? 's' : ''} in the collection
+                  <span style={{ color: '#8aacc8', margin: '0 2px' }}>·</span>
+                  Changes go live in ~1–2 min after saving
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                  {mezuzahs.map((m, i) => (
+                    <MezuzahCard
+                      key={`${m.name}-${i}`}
+                      mezuzah={m}
+                      onEdit={() => setMode({ type: 'edit', index: i })}
+                      onDelete={() => setMode({ type: 'delete', index: i })}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* ── About tab ──────────────────────────────────────────────── */}
+            {tab === 'about' && siteContent && (
+              <div
+                className="rounded-2xl p-6 sm:p-8"
+                style={{
+                  background: 'rgba(255,255,255,0.80)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.90)',
+                  boxShadow: '0 4px 24px rgba(30,100,180,0.10)',
+                }}
+              >
+                <h2
+                  className="text-lg font-bold mb-1"
+                  style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}
+                >
+                  About Page
+                </h2>
+                <p className="text-sm mb-6" style={{ color: '#3d6a96' }}>
+                  Edit the text that appears on the About page of the website.
+                </p>
+                <AboutEditor
+                  initial={siteContent}
+                  onSaved={(updated) => setSiteContent(updated)}
                 />
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* ── Contact tab ────────────────────────────────────────────── */}
+            {tab === 'contact' && siteContent && (
+              <div
+                className="rounded-2xl p-6 sm:p-8"
+                style={{
+                  background: 'rgba(255,255,255,0.80)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.90)',
+                  boxShadow: '0 4px 24px rgba(30,100,180,0.10)',
+                }}
+              >
+                <h2
+                  className="text-lg font-bold mb-1"
+                  style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}
+                >
+                  Contact Page
+                </h2>
+                <p className="text-sm mb-6" style={{ color: '#3d6a96' }}>
+                  Edit the intro text and phone number shown on the Contact page.
+                </p>
+                <ContactEditor
+                  initial={siteContent}
+                  onSaved={(updated) => setSiteContent(updated)}
+                />
+              </div>
+            )}
           </>
         )}
       </main>
