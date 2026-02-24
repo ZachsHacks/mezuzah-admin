@@ -42,7 +42,7 @@ export async function sendCustomOrderEmail(order: {
   details?: string;
 }) {
   const resend = getResend();
-  if (!resend || !TO()) return;
+  if (!resend) return;
 
   const sizeRow = order.size
     ? `<tr><td style="padding:8px 0;font-weight:bold;color:#1e3a58;width:140px;">Size:</td><td style="padding:8px 0;color:#2d5070;">${order.size}</td></tr>`

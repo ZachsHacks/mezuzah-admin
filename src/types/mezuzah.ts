@@ -9,16 +9,16 @@ export interface Mezuzah {
 
 export const ALL_CATEGORIES = [
   'Small (4″)',
-  'Medium (4-6″)',
-  'Large (7-8″)',
-  'Extra Large (10-12″)',
+  'Medium (5-7″)',
+  'Large (8-10″)',
+  'Extra Large (12″+)',
   'With Gold Leaf',
   'New Arrival',
 ] as const;
 
 export const SIZE_CATEGORIES = [
   'Small (4″)',
-  'Medium (4-6″)',
-  'Large (7-8″)',
-  'Extra Large (10-12″)',
+  'Medium (5-7″)',
+  'Large (8-10″)',
+  'Extra Large (12″+)',
 ] as const;

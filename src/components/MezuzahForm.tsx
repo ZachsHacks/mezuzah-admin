@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Mezuzah, ALL_CATEGORIES, SIZE_CATEGORIES } from '@/types/mezuzah';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +32,10 @@ function isVideo(src: string) {
   return /\.(mp4|mov|webm|ogg|m4v)$/i.test(src);
 }
 
+// Preview item tracks the display URL plus whether it's a video
+// (blob: URLs don't have extensions, so we carry the flag explicitly)
+type PreviewItem = { url: string; isVid: boolean };
+
 export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCategories, specialCategories }: Props) {
   const activeSizes    = sizeCategories    ?? (SIZE_CATEGORIES as readonly string[]);
   const activeSpecials = specialCategories ?? ALL_CATEGORIES.filter((c) => !(SIZE_CATEGORIES as readonly string[]).includes(c));
@@ -42,14 +46,26 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  // Previews are display URLs (local blob or GitHub raw) — parallel to form.images
-  const [previews, setPreviews] = useState<string[]>(
-    (initial?.images ?? []).map((img) =>
-      img.startsWith('http') ? img : `${GITHUB_RAW}${img}`
-    )
+  // Previews track display URL + video flag (parallel to form.images)
+  const [previews, setPreviews] = useState<PreviewItem[]>(
+    (initial?.images ?? []).map((img) => ({
+      url: img.startsWith('http') ? img : `${GITHUB_RAW}${img}`,
+      isVid: isVideo(img),
+    }))
   );
 
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Warn user before navigating away while upload is in progress
+  useEffect(() => {
+    if (!uploading) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [uploading]);
 
   function set<K extends keyof Mezuzah>(key: K, value: Mezuzah[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -72,7 +88,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
   function moveMedia(from: number, to: number) {
     const newPreviews = [...previews];
     const newImages   = [...form.images];
-    const [p] = newPreviews.splice(from, 1);
+    const [p]   = newPreviews.splice(from, 1);
     const [img] = newImages.splice(from, 1);
     newPreviews.splice(to, 0, p);
     newImages.splice(to, 0, img);
@@ -91,7 +107,9 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
 
     for (const file of arr) {
       const localUrl = URL.createObjectURL(file);
-      setPreviews((prev) => [...prev, localUrl]);
+      const isVid = file.type.startsWith('video/');
+      // Optimistically add the preview with the correct video flag
+      setPreviews((prev) => [...prev, { url: localUrl, isVid }]);
 
       const fd = new FormData();
       fd.append('file', file);
@@ -99,10 +117,11 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
 
       if (res.ok) {
-        const { path } = await res.json();
+        const { path } = await res.json() as { path: string };
         setForm((f) => ({ ...f, images: [...f.images, path] }));
       } else {
-        setPreviews((prev) => prev.filter((p) => p !== localUrl));
+        // Remove the optimistic preview on failure
+        setPreviews((prev) => prev.filter((p) => p.url !== localUrl));
         const body = await res.json().catch(() => ({}));
         setUploadError((body as { error?: string }).error ?? 'Upload failed');
       }
@@ -131,6 +150,15 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
             </span>
           )}
         </Label>
+
+        {/* Upload in-progress warning */}
+        {uploading && (
+          <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#92400e' }}>
+            <span className="animate-spin">⏳</span>
+            Uploading… please don&apos;t close or navigate away until complete.
+          </div>
+        )}
+
         <div
           className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
             isDropZoneOver ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-400'
@@ -146,7 +174,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
         >
           {previews.length > 0 ? (
             <div className="flex flex-wrap gap-2 justify-center">
-              {previews.map((src, i) => (
+              {previews.map((preview, i) => (
                 <div
                   key={i}
                   className={`relative group cursor-grab transition-opacity ${
@@ -165,16 +193,16 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
                   }}
                   onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
                 >
-                  {isVideo(src) ? (
+                  {preview.isVid ? (
                     <video
-                      src={src}
+                      src={preview.url}
                       className="h-24 w-20 object-cover rounded-lg border border-slate-200 pointer-events-none"
                       muted
                       playsInline
                     />
                   ) : (
                     <img
-                      src={src}
+                      src={preview.url}
                       alt={`Media ${i + 1}`}
                       className="h-24 w-20 object-cover rounded-lg border border-slate-200 pointer-events-none"
                     />
@@ -191,14 +219,14 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
                       Main
                     </span>
                   )}
-                  {isVideo(src) && (
+                  {preview.isVid && (
                     <span className="absolute top-1 left-1 bg-black/50 text-white text-[9px] rounded px-1 leading-4">
                       ▶
                     </span>
                   )}
                 </div>
               ))}
-              {/* Add more button */}
+              {/* Add more */}
               <div className="h-24 w-20 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
                 <span className="text-xl leading-none">+</span>
                 <span>Add more</span>
@@ -220,7 +248,6 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           className="hidden"
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
-        {uploading && <p className="text-sm text-blue-600">Uploading…</p>}
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
       </div>
 
@@ -315,7 +342,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           disabled={!isValid || saving || uploading}
           className="flex-1"
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : uploading ? 'Upload in progress…' : 'Save'}
         </Button>
         <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
           Cancel

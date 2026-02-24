@@ -124,23 +124,38 @@ export default function AdminPage() {
     saveAll(updated, `Removed "${name}" from collection`);
   }
 
-  // Called after categories are saved — cascade any deletions to all mezuzahs
-  function handleCategoriesSaved(updated: SiteContent) {
+  // Called after categories are saved — cascade renames + deletions to all mezuzahs
+  function handleCategoriesSaved(updated: SiteContent, renames: [string, string][]) {
     if (siteContent) {
       const oldAll = [...siteContent.categories.sizes, ...siteContent.categories.specials];
       const newSet = new Set([...updated.categories.sizes, ...updated.categories.specials]);
       const removed = oldAll.filter((c) => !newSet.has(c));
 
+      let cascaded = mezuzahs;
+
+      // Apply renames: map old category names to new ones
+      if (renames.length > 0) {
+        const renameMap = new Map(renames);
+        cascaded = cascaded.map((m) => ({
+          ...m,
+          categories: m.categories.map((c) => renameMap.get(c) ?? c),
+        }));
+      }
+
+      // Remove deleted categories
       if (removed.length > 0) {
-        const cascaded = mezuzahs.map((m) => ({
+        cascaded = cascaded.map((m) => ({
           ...m,
           categories: m.categories.filter((c) => !removed.includes(c)),
         }));
-        const anyChanged = mezuzahs.some((m, i) => m.categories.length !== cascaded[i].categories.length);
-        if (anyChanged) {
-          // Save the cascade silently — we don't want to block the category save confirmation
-          saveAll(cascaded, `Removed deleted categories from collection`);
-        }
+      }
+
+      const anyChanged =
+        JSON.stringify(mezuzahs.map((m) => m.categories)) !==
+        JSON.stringify(cascaded.map((m) => m.categories));
+
+      if (anyChanged) {
+        saveAll(cascaded, `Updated categories across collection`);
       }
     }
     setSiteContent(updated);

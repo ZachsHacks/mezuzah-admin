@@ -41,7 +41,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await sendCustomOrderEmail({ name: name.trim(), contact: contact.trim(), description: description.trim(), size, details });
+    // Fire-and-forget — email failures should not block the success response
+    sendCustomOrderEmail({ name: name.trim(), contact: contact.trim(), description: description.trim(), size, details })
+      .catch((e) => console.error('Custom order email failed:', e));
 
     return NextResponse.json({ ok: true }, { headers: corsHeaders(origin) });
   } catch (err) {
