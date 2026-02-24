@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { upload } from '@vercel/blob/client';
 import { Mezuzah, ALL_CATEGORIES, SIZE_CATEGORIES } from '@/types/mezuzah';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -102,28 +103,38 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
     );
     if (!arr.length) return;
 
+    // Client-side size check — 200 MB limit matches the Blob store config
+    const oversized = arr.find((f) => f.size > 200 * 1024 * 1024);
+    if (oversized) {
+      const mb = (oversized.size / 1024 / 1024).toFixed(0);
+      setUploadError(`"${oversized.name}" is ${mb} MB — files must be under 200 MB.`);
+      return;
+    }
+
     setUploading(true);
     setUploadError('');
 
     for (const file of arr) {
       const localUrl = URL.createObjectURL(file);
       const isVid = file.type.startsWith('video/');
-      // Optimistically add the preview with the correct video flag
       setPreviews((prev) => [...prev, { url: localUrl, isVid }]);
 
-      const fd = new FormData();
-      fd.append('file', file);
-
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-
-      if (res.ok) {
-        const { path } = await res.json() as { path: string };
-        setForm((f) => ({ ...f, images: [...f.images, path] }));
-      } else {
-        // Remove the optimistic preview on failure
+      try {
+        // File goes directly from browser → Vercel Blob (bypasses function payload limit)
+        const blob = await upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+        });
+        setForm((f) => ({ ...f, images: [...f.images, blob.url] }));
+      } catch (err) {
         setPreviews((prev) => prev.filter((p) => p.url !== localUrl));
-        const body = await res.json().catch(() => ({}));
-        setUploadError((body as { error?: string }).error ?? 'Upload failed');
+        const msg = err instanceof Error ? err.message : 'Upload failed';
+        // Give a friendlier message for large files
+        setUploadError(
+          msg.toLowerCase().includes('too large') || msg.includes('413')
+            ? `File is too large. Please trim the video to under a minute and try again.`
+            : msg
+        );
       }
     }
 

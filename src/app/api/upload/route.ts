@@ -1,52 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFile, putFile, createFile } from '@/lib/github';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { cookies } from 'next/headers';
 
-function sanitizeFilename(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9.\-_]/g, '')
-    .replace(/-+/g, '-');
-}
-
+// Client-upload token server — the actual file goes directly from the browser
+// to Vercel Blob, so it never hits this function's payload limit.
 export async function POST(req: NextRequest) {
+  const cookieStore = await cookies();
+  if (!cookieStore.get('admin_session')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const body = await req.json() as HandleUploadBody;
+
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async () => ({
+        allowedContentTypes: [
+          'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+          'image/heic', 'image/heif',
+          'video/mp4', 'video/quicktime', 'video/webm', 'video/ogg', 'video/x-m4v',
+        ],
+        maximumSizeInBytes: 200 * 1024 * 1024, // 200 MB
+      }),
+      onUploadCompleted: async () => {
+        // No post-processing needed
+      },
+    });
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-
-    // Sanitize filename with a timestamp prefix to avoid collisions
-    const ext = file.name.split('.').pop() || 'jpg';
-    const base = file.name.replace(/\.[^.]+$/, '');
-    const safeName = sanitizeFilename(base);
-    const filename = `${safeName}-${Date.now()}.${ext}`;
-    const repoPath = `images/${filename}`;
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const encoded = buffer.toString('base64');
-
-    // Try to update if it exists, otherwise create
-    let sha: string | undefined;
-    try {
-      const existing = await getFile(repoPath);
-      sha = existing.sha;
-    } catch {
-      // File doesn't exist yet — create it
-    }
-
-    if (sha) {
-      await putFile(repoPath, encoded, sha, `Upload image: ${filename}`);
-    } else {
-      await createFile(repoPath, encoded, `Upload image: ${filename}`);
-    }
-
-    return NextResponse.json({ path: `images/${filename}` });
+    return NextResponse.json(jsonResponse);
   } catch (err) {
-    console.error(err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
-
