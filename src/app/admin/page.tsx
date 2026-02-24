@@ -8,6 +8,7 @@ import MezuzahCard from '@/components/MezuzahCard';
 import MezuzahForm from '@/components/MezuzahForm';
 import AboutEditor from '@/components/AboutEditor';
 import ContactEditor from '@/components/ContactEditor';
+import CategoriesEditor from '@/components/CategoriesEditor';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,12 +20,13 @@ import {
 import { toast } from 'sonner';
 
 type Mode = { type: 'idle' } | { type: 'add' } | { type: 'edit'; index: number } | { type: 'delete'; index: number };
-type Tab = 'collection' | 'about' | 'contact';
+type Tab = 'collection' | 'about' | 'contact' | 'categories';
 
 const TAB_LABELS: { id: Tab; label: string }[] = [
-  { id: 'collection', label: 'Collection' },
-  { id: 'about',      label: 'About Page' },
-  { id: 'contact',    label: 'Contact Page' },
+  { id: 'collection',  label: 'Collection' },
+  { id: 'about',       label: 'About Page' },
+  { id: 'contact',     label: 'Contact Page' },
+  { id: 'categories',  label: 'Categories' },
 ];
 
 export default function AdminPage() {
@@ -293,6 +295,34 @@ export default function AdminPage() {
                 />
               </div>
             )}
+
+            {/* ── Categories tab ──────────────────────────────────────────── */}
+            {tab === 'categories' && siteContent && (
+              <div
+                className="rounded-2xl p-6 sm:p-8"
+                style={{
+                  background: 'rgba(255,255,255,0.80)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.90)',
+                  boxShadow: '0 4px 24px rgba(30,100,180,0.10)',
+                }}
+              >
+                <h2
+                  className="text-lg font-bold mb-1"
+                  style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}
+                >
+                  Categories
+                </h2>
+                <p className="text-sm mb-6" style={{ color: '#3d6a96' }}>
+                  Manage the size and special-tag categories that appear on the website filter bar and in the mezuzah form.
+                </p>
+                <CategoriesEditor
+                  initial={siteContent}
+                  onSaved={(updated) => setSiteContent(updated)}
+                />
+              </div>
+            )}
           </>
         )}
       </main>
@@ -312,6 +342,8 @@ export default function AdminPage() {
             onSave={handleAdd}
             onCancel={() => setMode({ type: 'idle' })}
             saving={saving}
+            sizeCategories={siteContent?.categories.sizes}
+            specialCategories={siteContent?.categories.specials}
           />
         </DialogContent>
       </Dialog>
@@ -336,6 +368,8 @@ export default function AdminPage() {
               onSave={(m) => handleEdit((mode as { type: 'edit'; index: number }).index, m)}
               onCancel={() => setMode({ type: 'idle' })}
               saving={saving}
+              sizeCategories={siteContent?.categories.sizes}
+              specialCategories={siteContent?.categories.specials}
             />
           )}
         </DialogContent>

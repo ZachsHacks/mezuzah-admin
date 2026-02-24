@@ -13,6 +13,8 @@ interface Props {
   onSave: (m: Mezuzah) => void;
   onCancel: () => void;
   saving: boolean;
+  sizeCategories?: string[];
+  specialCategories?: string[];
 }
 
 const EMPTY: Mezuzah = {
@@ -24,7 +26,9 @@ const EMPTY: Mezuzah = {
   description: '',
 };
 
-export default function MezuzahForm({ initial, onSave, onCancel, saving }: Props) {
+export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCategories, specialCategories }: Props) {
+  const activeSizes    = sizeCategories    ?? (SIZE_CATEGORIES as readonly string[]);
+  const activeSpecials = specialCategories ?? ALL_CATEGORIES.filter((c) => !(SIZE_CATEGORIES as readonly string[]).includes(c));
   const [form, setForm] = useState<Mezuzah>(initial ?? EMPTY);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -78,7 +82,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving }: Props
     onSave(form);
   }
 
-  const sizeSelected = form.categories.find((c) => (SIZE_CATEGORIES as readonly string[]).includes(c));
+  const sizeSelected = form.categories.find((c) => activeSizes.includes(c));
   const isValid = form.name && form.tagline && form.image && form.price > 0 && !!sizeSelected;
 
   return (
@@ -159,7 +163,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving }: Props
       <div className="space-y-2">
         <Label>Size * <span className="text-muted-foreground font-normal text-xs">(pick one)</span></Label>
         <div className="grid grid-cols-2 gap-2">
-          {SIZE_CATEGORIES.map((cat) => (
+          {activeSizes.map((cat) => (
             <label key={cat} className="flex items-center gap-2 cursor-pointer text-sm">
               <Checkbox
                 checked={form.categories.includes(cat)}
@@ -177,7 +181,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving }: Props
       <div className="space-y-2">
         <Label>Special Tags</Label>
         <div className="flex flex-col gap-2">
-          {ALL_CATEGORIES.filter((c) => !(SIZE_CATEGORIES as readonly string[]).includes(c)).map((cat) => (
+          {activeSpecials.map((cat) => (
             <label key={cat} className="flex items-center gap-2 cursor-pointer text-sm">
               <Checkbox
                 checked={form.categories.includes(cat)}

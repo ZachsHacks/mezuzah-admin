@@ -9,4 +9,8 @@ export interface SiteContent {
     phoneHref: string;
     subtext: string;
   };
+  categories: {
+    sizes: string[];
+    specials: string[];
+  };
 }

@@ -24,6 +24,9 @@ export function generateSiteContentFile(content: SiteContent): string {
     .map((l, i) => (i === 0 ? l : '    ' + l))
     .join('\n');
 
+  const sizesJson    = JSON.stringify(content.categories.sizes);
+  const specialsJson = JSON.stringify(content.categories.specials);
+
   return `${FILE_HEADER}const SITE_CONTENT = {
 
   about: {
@@ -36,6 +39,11 @@ export function generateSiteContentFile(content: SiteContent): string {
     phone: ${JSON.stringify(content.contact.phone)},
     phoneHref: ${JSON.stringify(content.contact.phoneHref)},
     subtext: ${JSON.stringify(content.contact.subtext)}
+  },
+
+  categories: {
+    sizes: ${sizesJson},
+    specials: ${specialsJson}
   }
 
 };\n`;
