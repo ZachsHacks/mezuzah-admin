@@ -53,7 +53,7 @@ export async function sendCustomOrderEmail(order: {
 
   await resend.emails.send({
     from: FROM(),
-    to: TO(),
+    to: 'weiss.sorah@gmail.com',
     subject: '🎨 New Custom Order Request — Made in Heaven Mezuzahs',
     html: `
       <div style="font-family:Georgia,serif;max-width:540px;margin:0 auto;padding:32px;color:#1e3a58;">

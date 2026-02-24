@@ -24,9 +24,13 @@ const EMPTY: Mezuzah = {
   name: '',
   tagline: '',
   price: 0,
-  categories: ['New Arrival'],
+  categories: [],
   description: '',
 };
+
+function isVideo(src: string) {
+  return /\.(mp4|mov|webm|ogg|m4v)$/i.test(src);
+}
 
 export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCategories, specialCategories }: Props) {
   const activeSizes    = sizeCategories    ?? (SIZE_CATEGORIES as readonly string[]);
@@ -34,7 +38,9 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
   const [form, setForm] = useState<Mezuzah>(initial ?? EMPTY);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [isDropZoneOver, setIsDropZoneOver] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   // Previews are display URLs (local blob or GitHub raw) — parallel to form.images
   const [previews, setPreviews] = useState<string[]>(
@@ -63,8 +69,21 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
     setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== index) }));
   }
 
+  function moveMedia(from: number, to: number) {
+    const newPreviews = [...previews];
+    const newImages   = [...form.images];
+    const [p] = newPreviews.splice(from, 1);
+    const [img] = newImages.splice(from, 1);
+    newPreviews.splice(to, 0, p);
+    newImages.splice(to, 0, img);
+    setPreviews(newPreviews);
+    setForm((f) => ({ ...f, images: newImages }));
+  }
+
   async function handleFiles(files: FileList | File[]) {
-    const arr = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    const arr = Array.from(files).filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+    );
     if (!arr.length) return;
 
     setUploading(true);
@@ -83,7 +102,6 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
         const { path } = await res.json();
         setForm((f) => ({ ...f, images: [...f.images, path] }));
       } else {
-        // Remove the optimistic preview
         setPreviews((prev) => prev.filter((p) => p !== localUrl));
         const body = await res.json().catch(() => ({}));
         setUploadError((body as { error?: string }).error ?? 'Upload failed');
@@ -103,31 +121,64 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Image upload */}
+      {/* Media upload */}
       <div className="space-y-2">
-        <Label>Photos {previews.length > 0 && <span className="text-muted-foreground font-normal text-xs">({previews.length} added)</span>}</Label>
+        <Label>
+          Photos &amp; Videos{' '}
+          {previews.length > 0 && (
+            <span className="text-muted-foreground font-normal text-xs">
+              ({previews.length} added — drag to reorder)
+            </span>
+          )}
+        </Label>
         <div
           className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-            isDragOver ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-400'
+            isDropZoneOver ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-400'
           }`}
           onClick={() => fileRef.current?.click()}
           onDrop={(e) => {
             e.preventDefault();
-            setIsDragOver(false);
+            setIsDropZoneOver(false);
             handleFiles(e.dataTransfer.files);
           }}
-          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-          onDragLeave={() => setIsDragOver(false)}
+          onDragOver={(e) => { e.preventDefault(); setIsDropZoneOver(true); }}
+          onDragLeave={() => setIsDropZoneOver(false)}
         >
           {previews.length > 0 ? (
             <div className="flex flex-wrap gap-2 justify-center">
               {previews.map((src, i) => (
-                <div key={i} className="relative group">
-                  <img
-                    src={src}
-                    alt={`Photo ${i + 1}`}
-                    className="h-24 w-20 object-cover rounded-lg border border-slate-200"
-                  />
+                <div
+                  key={i}
+                  className={`relative group cursor-grab transition-opacity ${
+                    dragIdx === i ? 'opacity-40' : dragOverIdx === i ? 'ring-2 ring-blue-400 rounded-lg' : ''
+                  }`}
+                  draggable
+                  onDragStart={(e) => { e.stopPropagation(); setDragIdx(i); }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverIdx(i); }}
+                  onDragLeave={() => setDragOverIdx(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (dragIdx !== null && dragIdx !== i) moveMedia(dragIdx, i);
+                    setDragIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                >
+                  {isVideo(src) ? (
+                    <video
+                      src={src}
+                      className="h-24 w-20 object-cover rounded-lg border border-slate-200 pointer-events-none"
+                      muted
+                      playsInline
+                    />
+                  ) : (
+                    <img
+                      src={src}
+                      alt={`Media ${i + 1}`}
+                      className="h-24 w-20 object-cover rounded-lg border border-slate-200 pointer-events-none"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); removeImage(i); }}
@@ -138,6 +189,11 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
                   {i === 0 && (
                     <span className="absolute bottom-1 left-0 right-0 text-center text-white text-[9px] bg-black/40 rounded-b-md leading-4">
                       Main
+                    </span>
+                  )}
+                  {isVideo(src) && (
+                    <span className="absolute top-1 left-1 bg-black/50 text-white text-[9px] rounded px-1 leading-4">
+                      ▶
                     </span>
                   )}
                 </div>
@@ -151,15 +207,15 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           ) : (
             <div className="py-6 text-muted-foreground text-sm">
               <div className="text-2xl mb-1">📷</div>
-              <div>Drag & drop or click to add photos</div>
-              <div className="text-xs mt-1 text-slate-400">Multiple images supported</div>
+              <div>Drag &amp; drop or click to add photos or videos</div>
+              <div className="text-xs mt-1 text-slate-400">Multiple files supported</div>
             </div>
           )}
         </div>
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           multiple
           className="hidden"
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
