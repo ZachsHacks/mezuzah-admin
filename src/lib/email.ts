@@ -34,6 +34,45 @@ export async function sendSubmittedEmail(changeDescription: string) {
   });
 }
 
+export async function sendCustomOrderEmail(order: {
+  name: string;
+  contact: string;
+  description: string;
+  size?: string;
+  details?: string;
+}) {
+  const resend = getResend();
+  if (!resend || !TO()) return;
+
+  const sizeRow = order.size
+    ? `<tr><td style="padding:8px 0;font-weight:bold;color:#1e3a58;width:140px;">Size:</td><td style="padding:8px 0;color:#2d5070;">${order.size}</td></tr>`
+    : '';
+  const detailsRow = order.details
+    ? `<tr><td style="padding:8px 0;font-weight:bold;color:#1e3a58;vertical-align:top;">Details:</td><td style="padding:8px 0;color:#2d5070;">${order.details}</td></tr>`
+    : '';
+
+  await resend.emails.send({
+    from: FROM(),
+    to: TO(),
+    subject: '🎨 New Custom Order Request — Made in Heaven Mezuzahs',
+    html: `
+      <div style="font-family:Georgia,serif;max-width:540px;margin:0 auto;padding:32px;color:#1e3a58;">
+        <h2 style="color:#1a7fd4;margin-bottom:8px;">✡ Made in Heaven Mezuzahs</h2>
+        <p style="color:#3d6a96;font-size:0.9rem;margin-bottom:24px;">New Custom Order Request from the Website</p>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:8px 0;font-weight:bold;color:#1e3a58;width:140px;">Name:</td><td style="padding:8px 0;color:#2d5070;">${order.name}</td></tr>
+          <tr><td style="padding:8px 0;font-weight:bold;color:#1e3a58;">Phone/Email:</td><td style="padding:8px 0;color:#2d5070;">${order.contact}</td></tr>
+          ${sizeRow}
+          <tr><td style="padding:8px 0;font-weight:bold;color:#1e3a58;vertical-align:top;">Vision:</td><td style="padding:8px 0;color:#2d5070;">${order.description}</td></tr>
+          ${detailsRow}
+        </table>
+        <hr style="border:none;border-top:1px solid #e0eaf5;margin:24px 0;" />
+        <p style="font-size:0.8rem;color:#8aacc8;">Sent by Made in Heaven Mezuzahs Website</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendLiveEmail() {
   const resend = getResend();
   if (!resend || !TO()) return;

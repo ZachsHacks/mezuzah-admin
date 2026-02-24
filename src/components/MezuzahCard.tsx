@@ -13,9 +13,10 @@ interface Props {
 const GITHUB_RAW = `https://raw.githubusercontent.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER}/${process.env.NEXT_PUBLIC_GITHUB_REPO}/main/`;
 
 export default function MezuzahCard({ mezuzah, onEdit, onDelete }: Props) {
-  const imgSrc = mezuzah.image.startsWith('http')
-    ? mezuzah.image
-    : `${GITHUB_RAW}${mezuzah.image}`;
+  const firstImg = mezuzah.images[0] ?? '';
+  const imgSrc = firstImg.startsWith('http')
+    ? firstImg
+    : `${GITHUB_RAW}${firstImg}`;
 
   return (
     <div
@@ -42,6 +43,7 @@ export default function MezuzahCard({ mezuzah, onEdit, onDelete }: Props) {
         <img
           src={imgSrc}
           alt={mezuzah.name}
+          title={mezuzah.images.length > 1 ? `${mezuzah.images.length} photos` : undefined}
           className="max-h-44 max-w-full object-contain p-2"
           loading="lazy"
         />

@@ -1,5 +1,8 @@
 import { Mezuzah } from '@/types/mezuzah';
 
+// Raw shape from the file may still have old `image` (singular) field
+type RawMezuzah = Omit<Mezuzah, 'images'> & { image?: string; images?: string[] };
+
 // The file in the repo uses Unicode ″ (U+2033) for inch marks.
 // JS template literals and object syntax — we parse server-side with Function().
 export function parseMezuzahsFile(content: string): Mezuzah[] {
@@ -10,7 +13,14 @@ export function parseMezuzahsFile(content: string): Mezuzah[] {
   }
   const arrayContent = content.slice(arrayStart, arrayEnd + 1);
   // eslint-disable-next-line no-new-func
-  return new Function(`return ${arrayContent}`)() as Mezuzah[];
+  const raw = new Function(`return ${arrayContent}`)() as RawMezuzah[];
+
+  // Normalize: convert old `image` (string) to `images` (array)
+  return raw.map((m) => {
+    const { image, images, ...rest } = m;
+    const normalizedImages = images ?? (image ? [image] : []);
+    return { ...rest, images: normalizedImages };
+  });
 }
 
 const FILE_HEADER = `// ┌─────────────────────────────────────────────────────────────────────────┐
@@ -33,8 +43,9 @@ export function generateMezuzahsFile(mezuzahs: Mezuzah[]): string {
         .replace(/`/g, '\\`')
         .replace(/\$\{/g, '\\${');
       const cats = JSON.stringify(m.categories);
+      const imgs = JSON.stringify(m.images);
       return `  {
-    image:      ${JSON.stringify(m.image)},
+    images:     ${imgs},
     name:       ${JSON.stringify(m.name)},
     tagline:    ${JSON.stringify(m.tagline)},
     price:      ${m.price},

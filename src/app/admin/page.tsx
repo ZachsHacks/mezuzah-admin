@@ -19,6 +19,13 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
+type FontSize = 'normal' | 'large' | 'larger';
+const FONT_SIZES: { key: FontSize; label: string; px: string; scale: string }[] = [
+  { key: 'normal', label: 'A', px: '0.72rem', scale: '100%' },
+  { key: 'large',  label: 'A', px: '0.88rem', scale: '112%' },
+  { key: 'larger', label: 'A', px: '1.05rem', scale: '125%' },
+];
+
 type Mode = { type: 'idle' } | { type: 'add' } | { type: 'edit'; index: number } | { type: 'delete'; index: number };
 type Tab = 'collection' | 'about' | 'contact' | 'categories';
 
@@ -36,7 +43,20 @@ export default function AdminPage() {
   const [saving, setSaving]           = useState(false);
   const [mode, setMode]               = useState<Mode>({ type: 'idle' });
   const [tab, setTab]                 = useState<Tab>('collection');
+  const [fontSize, setFontSize]       = useState<FontSize>('normal');
   const router = useRouter();
+
+  // Restore + persist font size
+  useEffect(() => {
+    const saved = (localStorage.getItem('admin_fontsize') as FontSize) ?? 'normal';
+    setFontSize(saved);
+  }, []);
+
+  useEffect(() => {
+    const scale = FONT_SIZES.find((f) => f.key === fontSize)?.scale ?? '100%';
+    document.documentElement.style.fontSize = scale;
+    localStorage.setItem('admin_fontsize', fontSize);
+  }, [fontSize]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -104,6 +124,28 @@ export default function AdminPage() {
     saveAll(updated, `Removed "${name}" from collection`);
   }
 
+  // Called after categories are saved — cascade any deletions to all mezuzahs
+  function handleCategoriesSaved(updated: SiteContent) {
+    if (siteContent) {
+      const oldAll = [...siteContent.categories.sizes, ...siteContent.categories.specials];
+      const newSet = new Set([...updated.categories.sizes, ...updated.categories.specials]);
+      const removed = oldAll.filter((c) => !newSet.has(c));
+
+      if (removed.length > 0) {
+        const cascaded = mezuzahs.map((m) => ({
+          ...m,
+          categories: m.categories.filter((c) => !removed.includes(c)),
+        }));
+        const anyChanged = mezuzahs.some((m, i) => m.categories.length !== cascaded[i].categories.length);
+        if (anyChanged) {
+          // Save the cascade silently — we don't want to block the category save confirmation
+          saveAll(cascaded, `Removed deleted categories from collection`);
+        }
+      }
+    }
+    setSiteContent(updated);
+  }
+
   async function handleLogout() {
     await fetch('/api/auth', { method: 'DELETE' });
     router.push('/');
@@ -157,6 +199,36 @@ export default function AdminPage() {
                 + Add Mezuzah
               </Button>
             )}
+
+            {/* Font size toggle */}
+            <div
+              className="flex items-center gap-0.5 rounded-lg px-1 py-0.5"
+              style={{ border: '1px solid rgba(68,153,212,0.25)', background: 'rgba(255,255,255,0.5)' }}
+              title="Adjust text size"
+            >
+              {FONT_SIZES.map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setFontSize(f.key)}
+                  style={{
+                    fontSize: f.px,
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontWeight: 700,
+                    background: fontSize === f.key ? 'rgba(68,153,212,0.15)' : 'transparent',
+                    border: fontSize === f.key ? '1px solid rgba(68,153,212,0.40)' : '1px solid transparent',
+                    borderRadius: '4px',
+                    color: fontSize === f.key ? '#1a7fd4' : '#8aacc8',
+                    cursor: 'pointer',
+                    padding: '1px 5px',
+                    lineHeight: '1.4',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             <Button
               size="sm"
               variant="ghost"
@@ -319,7 +391,7 @@ export default function AdminPage() {
                 </p>
                 <CategoriesEditor
                   initial={siteContent}
-                  onSaved={(updated) => setSiteContent(updated)}
+                  onSaved={handleCategoriesSaved}
                 />
               </div>
             )}

@@ -1,5 +1,5 @@
 export interface Mezuzah {
-  image: string;
+  images: string[];
   name: string;
   tagline: string;
   price: number;

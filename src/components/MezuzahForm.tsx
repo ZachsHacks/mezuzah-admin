@@ -17,8 +17,10 @@ interface Props {
   specialCategories?: string[];
 }
 
+const GITHUB_RAW = `https://raw.githubusercontent.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER}/${process.env.NEXT_PUBLIC_GITHUB_REPO}/main/`;
+
 const EMPTY: Mezuzah = {
-  image: '',
+  images: [],
   name: '',
   tagline: '',
   price: 0,
@@ -32,9 +34,15 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
   const [form, setForm] = useState<Mezuzah>(initial ?? EMPTY);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [preview, setPreview] = useState<string>(
-    initial?.image ? `https://raw.githubusercontent.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER}/${process.env.NEXT_PUBLIC_GITHUB_REPO}/main/${initial.image}` : ''
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Previews are display URLs (local blob or GitHub raw) — parallel to form.images
+  const [previews, setPreviews] = useState<string[]>(
+    (initial?.images ?? []).map((img) =>
+      img.startsWith('http') ? img : `${GITHUB_RAW}${img}`
+    )
   );
+
   const fileRef = useRef<HTMLInputElement>(null);
 
   function set<K extends keyof Mezuzah>(key: K, value: Mezuzah[K]) {
@@ -50,60 +58,101 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
     });
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function removeImage(index: number) {
+    setPreviews((prev) => prev.filter((_, i) => i !== index));
+    setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== index) }));
+  }
+
+  async function handleFiles(files: FileList | File[]) {
+    const arr = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (!arr.length) return;
 
     setUploading(true);
     setUploadError('');
 
-    // Local preview
-    const localUrl = URL.createObjectURL(file);
-    setPreview(localUrl);
+    for (const file of arr) {
+      const localUrl = URL.createObjectURL(file);
+      setPreviews((prev) => [...prev, localUrl]);
 
-    const fd = new FormData();
-    fd.append('file', file);
+      const fd = new FormData();
+      fd.append('file', file);
 
-    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
 
-    if (res.ok) {
-      const { path } = await res.json();
-      set('image', path);
-    } else {
-      const { error } = await res.json();
-      setUploadError(error ?? 'Upload failed');
-      setPreview('');
+      if (res.ok) {
+        const { path } = await res.json();
+        setForm((f) => ({ ...f, images: [...f.images, path] }));
+      } else {
+        // Remove the optimistic preview
+        setPreviews((prev) => prev.filter((p) => p !== localUrl));
+        const body = await res.json().catch(() => ({}));
+        setUploadError((body as { error?: string }).error ?? 'Upload failed');
+      }
     }
+
     setUploading(false);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     onSave(form);
   }
 
   const sizeSelected = form.categories.find((c) => activeSizes.includes(c));
-  const isValid = form.name && form.tagline && form.image && form.price > 0 && !!sizeSelected;
+  const isValid = form.name && form.tagline && form.images.length > 0 && form.price > 0 && !!sizeSelected;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Image upload */}
       <div className="space-y-2">
-        <Label>Photo</Label>
+        <Label>Photos {previews.length > 0 && <span className="text-muted-foreground font-normal text-xs">({previews.length} added)</span>}</Label>
         <div
-          className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-colors"
+          className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+            isDragOver ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-400'
+          }`}
           onClick={() => fileRef.current?.click()}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+            handleFiles(e.dataTransfer.files);
+          }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+          onDragLeave={() => setIsDragOver(false)}
         >
-          {preview ? (
-            <img
-              src={preview}
-              alt="Preview"
-              className="max-h-48 mx-auto rounded-lg object-contain"
-            />
+          {previews.length > 0 ? (
+            <div className="flex flex-wrap gap-2 justify-center">
+              {previews.map((src, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={src}
+                    alt={`Photo ${i + 1}`}
+                    className="h-24 w-20 object-cover rounded-lg border border-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeImage(i); }}
+                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity leading-none"
+                  >
+                    ×
+                  </button>
+                  {i === 0 && (
+                    <span className="absolute bottom-1 left-0 right-0 text-center text-white text-[9px] bg-black/40 rounded-b-md leading-4">
+                      Main
+                    </span>
+                  )}
+                </div>
+              ))}
+              {/* Add more button */}
+              <div className="h-24 w-20 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 text-xs gap-1">
+                <span className="text-xl leading-none">+</span>
+                <span>Add more</span>
+              </div>
+            </div>
           ) : (
             <div className="py-6 text-muted-foreground text-sm">
               <div className="text-2xl mb-1">📷</div>
-              Click to upload photo
+              <div>Drag & drop or click to add photos</div>
+              <div className="text-xs mt-1 text-slate-400">Multiple images supported</div>
             </div>
           )}
         </div>
@@ -111,14 +160,12 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           ref={fileRef}
           type="file"
           accept="image/*"
+          multiple
           className="hidden"
-          onChange={handleImageUpload}
+          onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
         {uploading && <p className="text-sm text-blue-600">Uploading…</p>}
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
-        {form.image && !uploading && (
-          <p className="text-xs text-muted-foreground truncate">{form.image}</p>
-        )}
       </div>
 
       {/* Name */}
