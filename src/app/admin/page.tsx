@@ -257,20 +257,40 @@ export default function AdminPage() {
           </div>
           <div className="flex gap-2 items-center">
             {tab === 'collection' && (
-              <Button
-                size="sm"
-                onClick={() => setMode({ type: 'add' })}
-                style={{
-                  fontFamily: 'var(--font-playfair), serif',
-                  background: 'linear-gradient(135deg, #4499d4, #2277bb)',
-                  border: 'none',
-                  boxShadow: '0 2px 10px rgba(34,119,187,0.30)',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                }}
-              >
-                + Add Mezuzah
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setMode({ type: 'add' })}
+                  style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    background: 'linear-gradient(135deg, #4499d4, #2277bb)',
+                    border: 'none',
+                    boxShadow: '0 2px 10px rgba(34,119,187,0.30)',
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  + Add Mezuzah
+                </Button>
+                <a
+                  href="/admin/upload"
+                  title="Mobile photo upload — share this link with mom"
+                  style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: '#3d6a96',
+                    padding: '5px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(68,153,212,0.25)',
+                    background: 'rgba(255,255,255,0.5)',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  📷 Upload
+                </a>
+              </>
             )}
 
             {/* Font size toggle */}
