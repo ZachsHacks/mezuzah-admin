@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
           'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
           'image/heic', 'image/heif',
           'video/mp4', 'video/quicktime', 'video/webm', 'video/ogg', 'video/x-m4v',
+          'video/avif',
         ],
         maximumSizeInBytes: 200 * 1024 * 1024, // 200 MB
       }),

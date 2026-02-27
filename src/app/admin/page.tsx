@@ -26,7 +26,13 @@ const FONT_SIZES: { key: FontSize; label: string; px: string; scale: string }[] 
   { key: 'larger', label: 'A', px: '1.05rem', scale: '125%' },
 ];
 
-type Mode = { type: 'idle' } | { type: 'add' } | { type: 'edit'; index: number } | { type: 'delete'; index: number };
+type Mode =
+  | { type: 'idle' }
+  | { type: 'add' }
+  | { type: 'edit'; index: number }
+  | { type: 'editDraft'; draftId: string }
+  | { type: 'delete'; index: number };
+
 type Tab = 'collection' | 'about' | 'contact' | 'categories';
 
 const TAB_LABELS: { id: Tab; label: string }[] = [
@@ -38,6 +44,7 @@ const TAB_LABELS: { id: Tab; label: string }[] = [
 
 export default function AdminPage() {
   const [mezuzahs, setMezuzahs]       = useState<Mezuzah[]>([]);
+  const [drafts, setDrafts]           = useState<Mezuzah[]>([]);
   const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
@@ -60,9 +67,10 @@ export default function AdminPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [mRes, cRes] = await Promise.all([
+    const [mRes, cRes, dRes] = await Promise.all([
       fetch('/api/mezuzahs'),
       fetch('/api/site-content'),
+      fetch('/api/drafts'),
     ]);
 
     if (mRes.status === 401 || cRes.status === 401) {
@@ -84,12 +92,17 @@ export default function AdminPage() {
       toast.error('Failed to load page content');
     }
 
+    if (dRes.ok) {
+      const { drafts: data } = await dRes.json();
+      setDrafts(data ?? []);
+    }
+
     setLoading(false);
   }, [router]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  async function saveAll(updated: Mezuzah[], changeDescription?: string) {
+  async function saveAll(updated: Mezuzah[], changeDescription?: string): Promise<boolean> {
     setSaving(true);
     const res = await fetch('/api/mezuzahs', {
       method: 'PUT',
@@ -102,14 +115,60 @@ export default function AdminPage() {
       setMezuzahs(updated);
       setMode({ type: 'idle' });
       toast.success('Saved! Changes will go live in ~1–2 minutes.');
+      return true;
     } else {
       const { error } = await res.json();
       toast.error(`Save failed: ${error}`);
+      return false;
     }
   }
 
-  function handleAdd(m: Mezuzah) {
-    saveAll([m, ...mezuzahs], `Added "${m.name}" ($${m.price})`);
+  async function saveDrafts(updated: Mezuzah[]) {
+    const res = await fetch('/api/drafts', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drafts: updated }),
+    });
+    if (res.ok) setDrafts(updated);
+    return res.ok;
+  }
+
+  // Called by MezuzahForm after each image upload — persists a draft to GitHub
+  async function handleAutoSave(form: Mezuzah): Promise<Mezuzah> {
+    const id = form.id ?? Date.now().toString(36);
+    const draft: Mezuzah = { ...form, id, draft: true };
+
+    const updatedDrafts = drafts.some((d) => d.id === id)
+      ? drafts.map((d) => (d.id === id ? draft : d))
+      : [draft, ...drafts];
+
+    await saveDrafts(updatedDrafts);
+    toast.success('Draft saved — finish it any time on any device.', { duration: 3000 });
+    return draft;
+  }
+
+  async function handleAdd(m: Mezuzah) {
+    const draftId = m.id;
+    const { id: _id, draft: _draft, ...cleanMezuzah } = m;
+    const ok = await saveAll([cleanMezuzah, ...mezuzahs], `Added "${cleanMezuzah.name}" ($${cleanMezuzah.price})`);
+    if (ok && draftId) {
+      await saveDrafts(drafts.filter((d) => d.id !== draftId));
+    }
+  }
+
+  // Completes a draft: publishes it to the live collection and removes it from drafts
+  async function handleDraftComplete(m: Mezuzah) {
+    const draftId = m.id;
+    const { id: _id, draft: _draft, ...cleanMezuzah } = m;
+    const ok = await saveAll([cleanMezuzah, ...mezuzahs], `Added "${cleanMezuzah.name}" ($${cleanMezuzah.price})`);
+    if (ok && draftId) {
+      await saveDrafts(drafts.filter((d) => d.id !== draftId));
+    }
+  }
+
+  async function handleDeleteDraft(id: string) {
+    await saveDrafts(drafts.filter((d) => d.id !== id));
+    toast.success('Draft deleted.');
   }
 
   function handleEdit(index: number, m: Mezuzah) {
@@ -133,7 +192,6 @@ export default function AdminPage() {
 
       let cascaded = mezuzahs;
 
-      // Apply renames: map old category names to new ones
       if (renames.length > 0) {
         const renameMap = new Map(renames);
         cascaded = cascaded.map((m) => ({
@@ -142,7 +200,6 @@ export default function AdminPage() {
         }));
       }
 
-      // Remove deleted categories
       if (removed.length > 0) {
         cascaded = cascaded.map((m) => ({
           ...m,
@@ -166,8 +223,9 @@ export default function AdminPage() {
     router.push('/');
   }
 
-  const editingMezuzah  = mode.type === 'edit'   ? mezuzahs[mode.index] : undefined;
-  const deletingMezuzah = mode.type === 'delete' ? mezuzahs[mode.index] : undefined;
+  const editingMezuzah  = mode.type === 'edit'      ? mezuzahs[mode.index] : undefined;
+  const editingDraft    = mode.type === 'editDraft'  ? drafts.find((d) => d.id === mode.draftId) : undefined;
+  const deletingMezuzah = mode.type === 'delete'     ? mezuzahs[mode.index] : undefined;
 
   return (
     <div className="min-h-screen">
@@ -310,9 +368,37 @@ export default function AdminPage() {
                 >
                   <span style={{ color: '#1a7fd4' }}>✡</span>
                   <strong>{mezuzahs.length}</strong>&nbsp;mezuzah{mezuzahs.length !== 1 ? 's' : ''} in the collection
+                  {drafts.length > 0 && (
+                    <>
+                      <span style={{ color: '#8aacc8', margin: '0 2px' }}>·</span>
+                      <strong style={{ color: '#b45309' }}>{drafts.length}</strong>&nbsp;draft{drafts.length !== 1 ? 's' : ''}
+                    </>
+                  )}
                   <span style={{ color: '#8aacc8', margin: '0 2px' }}>·</span>
                   Changes go live in ~1–2 min after saving
                 </div>
+
+                {/* Drafts section */}
+                {drafts.length > 0 && (
+                  <div className="mb-8">
+                    <h2
+                      className="text-sm font-semibold uppercase tracking-widest mb-3"
+                      style={{ fontFamily: 'var(--font-playfair), serif', color: '#b45309' }}
+                    >
+                      Drafts — tap to complete
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                      {drafts.map((draft) => (
+                        <MezuzahCard
+                          key={`draft-${draft.id}`}
+                          mezuzah={draft}
+                          onEdit={() => setMode({ type: 'editDraft', draftId: draft.id! })}
+                          onDelete={() => handleDeleteDraft(draft.id!)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                   {mezuzahs.map((m, i) => (
@@ -424,6 +510,9 @@ export default function AdminPage() {
             <DialogTitle style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}>
               Add New Mezuzah
             </DialogTitle>
+            <DialogDescription>
+              Upload photos or a video first — it auto-saves as a draft so you can finish the details later on any device.
+            </DialogDescription>
           </DialogHeader>
           <MezuzahForm
             onSave={handleAdd}
@@ -431,6 +520,7 @@ export default function AdminPage() {
             saving={saving}
             sizeCategories={siteContent?.categories.sizes}
             specialCategories={siteContent?.categories.specials}
+            onAutoSave={handleAutoSave}
           />
         </DialogContent>
       </Dialog>
@@ -453,6 +543,36 @@ export default function AdminPage() {
             <MezuzahForm
               initial={editingMezuzah}
               onSave={(m) => handleEdit((mode as { type: 'edit'; index: number }).index, m)}
+              onCancel={() => setMode({ type: 'idle' })}
+              saving={saving}
+              sizeCategories={siteContent?.categories.sizes}
+              specialCategories={siteContent?.categories.specials}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete Draft Dialog */}
+      <Dialog
+        open={mode.type === 'editDraft'}
+        onOpenChange={(open) => !open && setMode({ type: 'idle' })}
+      >
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(16px)' }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}>
+              Complete Your Draft
+            </DialogTitle>
+            <DialogDescription>
+              Add the name, price, and other details to publish this mezuzah to the website.
+            </DialogDescription>
+          </DialogHeader>
+          {editingDraft && (
+            <MezuzahForm
+              initial={editingDraft}
+              onSave={handleDraftComplete}
               onCancel={() => setMode({ type: 'idle' })}
               saving={saving}
               sizeCategories={siteContent?.categories.sizes}

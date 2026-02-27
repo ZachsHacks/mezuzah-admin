@@ -1,4 +1,6 @@
 export interface Mezuzah {
+  id?: string;      // assigned when an auto-saved draft is created
+  draft?: boolean;  // true while not yet published
   images: string[];
   name: string;
   tagline: string;

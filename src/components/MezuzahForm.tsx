@@ -16,6 +16,9 @@ interface Props {
   saving: boolean;
   sizeCategories?: string[];
   specialCategories?: string[];
+  // Called after each image upload so the draft can be persisted cross-device.
+  // Returns the saved draft (with its assigned id).
+  onAutoSave?: (form: Mezuzah) => Promise<Mezuzah>;
 }
 
 const GITHUB_RAW = `https://raw.githubusercontent.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER}/${process.env.NEXT_PUBLIC_GITHUB_REPO}/main/`;
@@ -30,22 +33,36 @@ const EMPTY: Mezuzah = {
 };
 
 function isVideo(src: string) {
-  return /\.(mp4|mov|webm|ogg|m4v)$/i.test(src);
+  return /\.(mp4|mov|webm|ogg|m4v|avif)$/i.test(src) || src.startsWith('blob:');
 }
 
 // Preview item tracks the display URL plus whether it's a video
 // (blob: URLs don't have extensions, so we carry the flag explicitly)
 type PreviewItem = { url: string; isVid: boolean };
 
-export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCategories, specialCategories }: Props) {
+export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCategories, specialCategories, onAutoSave }: Props) {
   const activeSizes    = sizeCategories    ?? (SIZE_CATEGORIES as readonly string[]);
   const activeSpecials = specialCategories ?? ALL_CATEGORIES.filter((c) => !(SIZE_CATEGORIES as readonly string[]).includes(c));
   const [form, setForm] = useState<Mezuzah>(initial ?? EMPTY);
   const [uploading, setUploading] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [isDropZoneOver, setIsDropZoneOver] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Keeps a ref to the latest form so handleFiles can read it across awaits
+  const formRef = useRef<Mezuzah>(form);
+  useEffect(() => { formRef.current = form; }, [form]);
+
+  // Debounced sessionStorage autosave — protects in-progress typing on same device
+  useEffect(() => {
+    const key = `mezuzah_form_${form.id ?? 'new'}`;
+    const t = setTimeout(() => {
+      try { sessionStorage.setItem(key, JSON.stringify(form)); } catch { /* ignore */ }
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [form]);
 
   // Previews track display URL + video flag (parallel to form.images)
   const [previews, setPreviews] = useState<PreviewItem[]>(
@@ -125,14 +142,32 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           access: 'public',
           handleUploadUrl: '/api/upload',
         });
+
+        // Build updated images list using the ref so we have the latest state across awaits
+        const updatedImages = [...formRef.current.images, blob.url];
         setForm((f) => ({ ...f, images: [...f.images, blob.url] }));
+
+        // Auto-save draft to GitHub for cross-device persistence
+        if (onAutoSave) {
+          setAutoSaving(true);
+          try {
+            const formToSave: Mezuzah = { ...formRef.current, images: updatedImages };
+            const saved = await onAutoSave(formToSave);
+            // Store the assigned draft id back into form state
+            setForm((f) => ({ ...f, id: saved.id }));
+            formRef.current = { ...formRef.current, id: saved.id, images: updatedImages };
+          } catch {
+            // Auto-save failure is non-fatal — upload succeeded, draft just isn't persisted yet
+          } finally {
+            setAutoSaving(false);
+          }
+        }
       } catch (err) {
         setPreviews((prev) => prev.filter((p) => p.url !== localUrl));
         const msg = err instanceof Error ? err.message : 'Upload failed';
-        // Give a friendlier message for large files
         setUploadError(
           msg.toLowerCase().includes('too large') || msg.includes('413')
-            ? `File is too large. Please trim the video to under a minute and try again.`
+            ? 'File is too large. Please try a shorter video or a smaller image.'
             : msg
         );
       }
@@ -143,6 +178,8 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Clear sessionStorage backup on explicit save
+    try { sessionStorage.removeItem(`mezuzah_form_${form.id ?? 'new'}`); } catch { /* ignore */ }
     onSave(form);
   }
 
@@ -167,6 +204,14 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#92400e' }}>
             <span className="animate-spin">⏳</span>
             Uploading… please don&apos;t close or navigate away until complete.
+          </div>
+        )}
+
+        {/* Auto-save indicator */}
+        {autoSaving && !uploading && (
+          <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#15803d' }}>
+            <span>💾</span>
+            Saving draft…
           </div>
         )}
 
@@ -260,6 +305,11 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
         {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+        {onAutoSave && form.images.length > 0 && !autoSaving && (
+          <p className="text-xs" style={{ color: '#15803d' }}>
+            ✓ Draft saved — you can close this and finish later on any device.
+          </p>
+        )}
       </div>
 
       {/* Name */}

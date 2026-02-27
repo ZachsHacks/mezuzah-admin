@@ -22,11 +22,11 @@ export default function MezuzahCard({ mezuzah, onEdit, onDelete }: Props) {
     <div
       className="overflow-hidden rounded-xl transition-all hover:-translate-y-1"
       style={{
-        background: 'rgba(255,255,255,0.72)',
+        background: mezuzah.draft ? 'rgba(255,247,237,0.90)' : 'rgba(255,255,255,0.72)',
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
-        border: '1px solid rgba(255,255,255,0.85)',
-        boxShadow: '0 4px 18px rgba(80,140,200,0.12)',
+        border: mezuzah.draft ? '1.5px solid rgba(180,83,9,0.30)' : '1px solid rgba(255,255,255,0.85)',
+        boxShadow: mezuzah.draft ? '0 4px 18px rgba(180,83,9,0.10)' : '0 4px 18px rgba(80,140,200,0.12)',
         transition: 'transform 0.2s, box-shadow 0.2s',
       }}
       onMouseEnter={(e) => {
@@ -49,15 +49,23 @@ export default function MezuzahCard({ mezuzah, onEdit, onDelete }: Props) {
         />
       </div>
       <div className="p-4 space-y-3">
+        {mezuzah.draft && (
+          <div
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+            style={{ background: 'rgba(180,83,9,0.12)', color: '#b45309', border: '1px solid rgba(180,83,9,0.25)' }}
+          >
+            ✏️ Draft
+          </div>
+        )}
         <div>
           <h3
             className="font-semibold leading-tight"
-            style={{ fontFamily: 'var(--font-playfair), serif', color: '#1e3a58' }}
+            style={{ fontFamily: 'var(--font-playfair), serif', color: mezuzah.draft ? '#78350f' : '#1e3a58' }}
           >
-            {mezuzah.name}
+            {mezuzah.name || <span className="italic font-normal text-sm" style={{ color: '#b45309' }}>Unnamed — tap Edit to complete</span>}
           </h3>
           <p className="text-sm italic" style={{ color: '#3d6a96' }}>{mezuzah.tagline}</p>
-          <p className="font-bold mt-1" style={{ color: '#1e3a58' }}>${mezuzah.price}</p>
+          {mezuzah.price > 0 && <p className="font-bold mt-1" style={{ color: '#1e3a58' }}>${mezuzah.price}</p>}
         </div>
 
         <div className="flex flex-wrap gap-1">
