@@ -50,6 +50,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
   const [isDropZoneOver, setIsDropZoneOver] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   // Keeps a ref to the latest form so handleFiles can read it across awaits
   const formRef = useRef<Mezuzah>(form);
@@ -174,6 +175,30 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
     }
 
     setUploading(false);
+  }
+
+  async function generateDescription() {
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/generate-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          tagline: form.tagline,
+          categories: form.categories,
+          imageUrl: form.images[0] || '',
+        }),
+      });
+      const data = await res.json();
+      if (data.description) {
+        set('description', data.description);
+      }
+    } catch {
+      // Silently fail — user can write manually
+    } finally {
+      setGenerating(false);
+    }
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -386,7 +411,24 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
 
       {/* Description */}
       <div className="space-y-2">
-        <Label htmlFor="desc">Description</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="desc">Description</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generating || !form.name}
+            onClick={generateDescription}
+            className="text-xs h-7 px-2.5 gap-1"
+            style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
+          >
+            {generating ? (
+              <><span className="animate-spin inline-block">⏳</span> Generating…</>
+            ) : (
+              <><span>✨</span> AI Describe</>
+            )}
+          </Button>
+        </div>
         <Textarea
           id="desc"
           value={form.description}

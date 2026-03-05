@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
           'video/avif',
         ],
         maximumSizeInBytes: 200 * 1024 * 1024, // 200 MB
+        addRandomSuffix: true,
       }),
       onUploadCompleted: async () => {
         // No post-processing needed

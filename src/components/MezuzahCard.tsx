@@ -3,6 +3,7 @@
 import { Mezuzah } from '@/types/mezuzah';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import ImageMagnifier from '@/components/ImageMagnifier';
 
 interface Props {
   mezuzah: Mezuzah;
@@ -40,12 +41,12 @@ export default function MezuzahCard({ mezuzah, onEdit, onDelete }: Props) {
         className="flex items-center justify-center h-48"
         style={{ background: 'rgba(235,244,252,0.55)' }}
       >
-        <img
+        <ImageMagnifier
           src={imgSrc}
           alt={mezuzah.name}
-          title={mezuzah.images.length > 1 ? `${mezuzah.images.length} photos` : undefined}
           className="max-h-44 max-w-full object-contain p-2"
-          loading="lazy"
+          zoomLevel={3}
+          lensSize={120}
         />
       </div>
       <div className="p-4 space-y-3">
