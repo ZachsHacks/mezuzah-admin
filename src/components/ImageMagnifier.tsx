@@ -21,6 +21,7 @@ export default function ImageMagnifier({
   const [show, setShow] = useState(false);
   const [bgPos, setBgPos] = useState({ x: 50, y: 50 });
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
+  const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
   const imgRef = useRef<HTMLImageElement>(null);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -64,6 +65,10 @@ export default function ImageMagnifier({
           alt={alt}
           className={className}
           style={{ ...style, cursor: show ? 'crosshair' : undefined }}
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+          }}
         />
       </div>
       {show && typeof document !== 'undefined' &&
@@ -79,7 +84,9 @@ export default function ImageMagnifier({
               border: '2px solid rgba(255,255,255,0.9)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
               backgroundImage: `url(${src})`,
-              backgroundSize: `${zoomLevel * 100}% ${zoomLevel * 100}%`,
+              backgroundSize: imgNatural.w > imgNatural.h
+                ? `${zoomLevel * 100}% auto`
+                : `auto ${zoomLevel * 100}%`,
               backgroundPosition: `${bgPos.x}% ${bgPos.y}%`,
               backgroundRepeat: 'no-repeat',
               backgroundColor: 'rgba(235,244,252,0.95)',
