@@ -177,7 +177,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
     setUploading(false);
   }
 
-  async function generateDescription() {
+  async function generateWithAI() {
     setGenerating(true);
     try {
       const res = await fetch('/api/generate-description', {
@@ -191,9 +191,12 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
         }),
       });
       const data = await res.json();
-      if (data.description) {
-        set('description', data.description);
-      }
+      setForm((f) => ({
+        ...f,
+        name: f.name || data.name || f.name,
+        tagline: f.tagline || data.tagline || f.tagline,
+        description: data.description || f.description,
+      }));
     } catch {
       // Silently fail — user can write manually
     } finally {
@@ -409,26 +412,31 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
         </div>
       </div>
 
+      {/* AI Generate — fills in empty name, tagline, and always regenerates description */}
+      <div className="space-y-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={generating || form.images.length === 0}
+          onClick={generateWithAI}
+          className="w-full text-sm h-9 gap-1.5"
+          style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
+        >
+          {generating ? (
+            <><span className="animate-spin inline-block">⏳</span> Generating…</>
+          ) : (
+            <><span>✨</span> AI Generate {!form.name && !form.tagline ? 'Name, Tagline & Description' : 'Description'}</>
+          )}
+        </Button>
+        {form.images.length === 0 && (
+          <p className="text-xs text-muted-foreground">Upload at least one photo to enable AI generation</p>
+        )}
+      </div>
+
       {/* Description */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="desc">Description</Label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={generating || !form.name}
-            onClick={generateDescription}
-            className="text-xs h-7 px-2.5 gap-1"
-            style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
-          >
-            {generating ? (
-              <><span className="animate-spin inline-block">⏳</span> Generating…</>
-            ) : (
-              <><span>✨</span> AI Describe</>
-            )}
-          </Button>
-        </div>
+        <Label htmlFor="desc">Description</Label>
         <Textarea
           id="desc"
           value={form.description}
