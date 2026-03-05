@@ -50,7 +50,7 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
   const [isDropZoneOver, setIsDropZoneOver] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [generatingField, setGeneratingField] = useState<string | null>(null);
 
   // Keeps a ref to the latest form so handleFiles can read it across awaits
   const formRef = useRef<Mezuzah>(form);
@@ -177,8 +177,8 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
     setUploading(false);
   }
 
-  async function generateWithAI() {
-    setGenerating(true);
+  async function generateField(field: 'name' | 'tagline' | 'description') {
+    setGeneratingField(field);
     try {
       const res = await fetch('/api/generate-description', {
         method: 'POST',
@@ -188,19 +188,17 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
           tagline: form.tagline,
           categories: form.categories,
           imageUrl: form.images[0] || '',
+          field,
         }),
       });
       const data = await res.json();
-      setForm((f) => ({
-        ...f,
-        name: f.name || data.name || f.name,
-        tagline: f.tagline || data.tagline || f.tagline,
-        description: data.description || f.description,
-      }));
+      if (data[field]) {
+        set(field, data[field]);
+      }
     } catch {
       // Silently fail — user can write manually
     } finally {
-      setGenerating(false);
+      setGeneratingField(null);
     }
   }
 
@@ -342,7 +340,20 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
 
       {/* Name */}
       <div className="space-y-2">
-        <Label htmlFor="name">Name *</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="name">Name *</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generatingField !== null || form.images.length === 0}
+            onClick={() => generateField('name')}
+            className="text-xs h-6 px-2 gap-1"
+            style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
+          >
+            {generatingField === 'name' ? <><span className="animate-spin inline-block">⏳</span> Generating…</> : <><span>✨</span> AI</>}
+          </Button>
+        </div>
         <Input
           id="name"
           value={form.name}
@@ -354,7 +365,20 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
 
       {/* Tagline */}
       <div className="space-y-2">
-        <Label htmlFor="tagline">Tagline *</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="tagline">Tagline *</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generatingField !== null || form.images.length === 0}
+            onClick={() => generateField('tagline')}
+            className="text-xs h-6 px-2 gap-1"
+            style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
+          >
+            {generatingField === 'tagline' ? <><span className="animate-spin inline-block">⏳</span> Generating…</> : <><span>✨</span> AI</>}
+          </Button>
+        </div>
         <Input
           id="tagline"
           value={form.tagline}
@@ -412,31 +436,22 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
         </div>
       </div>
 
-      {/* AI Generate — fills in empty name, tagline, and always regenerates description */}
-      <div className="space-y-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={generating || form.images.length === 0}
-          onClick={generateWithAI}
-          className="w-full text-sm h-9 gap-1.5"
-          style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
-        >
-          {generating ? (
-            <><span className="animate-spin inline-block">⏳</span> Generating…</>
-          ) : (
-            <><span>✨</span> AI Generate {!form.name && !form.tagline ? 'Name, Tagline & Description' : 'Description'}</>
-          )}
-        </Button>
-        {form.images.length === 0 && (
-          <p className="text-xs text-muted-foreground">Upload at least one photo to enable AI generation</p>
-        )}
-      </div>
-
       {/* Description */}
       <div className="space-y-2">
-        <Label htmlFor="desc">Description</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="desc">Description</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={generatingField !== null || form.images.length === 0}
+            onClick={() => generateField('description')}
+            className="text-xs h-6 px-2 gap-1"
+            style={{ borderColor: 'rgba(139,92,246,0.35)', color: '#7c3aed' }}
+          >
+            {generatingField === 'description' ? <><span className="animate-spin inline-block">⏳</span> Generating…</> : <><span>✨</span> AI</>}
+          </Button>
+        </div>
         <Textarea
           id="desc"
           value={form.description}

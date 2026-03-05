@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, tagline, categories, imageUrl } = await req.json();
+    const { name, tagline, categories, imageUrl, field } = await req.json();
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
@@ -19,10 +19,6 @@ export async function POST(req: NextRequest) {
       hasGoldLeaf ? 'Features gold leaf accents' : '',
     ].filter(Boolean).join('\n');
 
-    // Determine which fields to generate
-    const needName = !name;
-    const needTagline = !tagline;
-
     const content: Array<{ type: string; source?: { type: string; url?: string }; text?: string }> = [];
 
     if (imageUrl) {
@@ -32,21 +28,31 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    content.push({
-      type: 'text',
-      text: `You are writing product copy for "Made in Heaven Mezuzahs" — a collection of handcrafted, artistic mezuzah cases by Sorah Weiss. Each piece is unique and made with love.
+    // Field-specific prompts
+    const fieldPrompts: Record<string, string> = {
+      name: 'Generate a short, evocative product name (2-4 words, like "The Garden Rose" or "Sapphire Dreams"). Creative, boutique feel. Return ONLY the name text, nothing else.',
+      tagline: 'Generate a brief poetic tagline (4-8 words, like "Blooming at Your Door" or "Where Earth Meets Sky"). Return ONLY the tagline text, nothing else.',
+      description: 'Write a warm, poetic product description (2-3 sentences). Artisan and heartfelt tone — like a small boutique, not a big retailer. Focus on beauty, craftsmanship, and spiritual significance. Return ONLY the description text, nothing else.',
+    };
+
+    const preamble = `You are writing product copy for "Made in Heaven Mezuzahs" — a collection of handcrafted, artistic mezuzah cases by Sorah Weiss. Each piece is unique and made with love.
 
 ${known ? `Here is what we know so far:\n${known}` : 'No details provided yet — use the image to guide you.'}
 
-${imageUrl ? 'Use the image above to describe the visual details — colors, textures, patterns, materials you can see.' : 'Since no image is available, create something inspired and beautiful.'}
+${imageUrl ? 'Use the image above to describe the visual details — colors, textures, patterns, materials you can see.' : 'Since no image is available, create something inspired and beautiful.'}`;
 
-Generate the following as a JSON object:
-${needName ? '- "name": A short, evocative product name (2-4 words, like "The Garden Rose" or "Sapphire Dreams"). Creative, boutique feel.' : ''}
-${needTagline ? '- "tagline": A brief poetic tagline (4-8 words, like "Blooming at Your Door" or "Where Earth Meets Sky").' : ''}
-- "description": A warm, poetic product description (2-3 sentences). Artisan and heartfelt tone — like a small boutique, not a big retailer. Focus on beauty, craftsmanship, and spiritual significance.
-
-Return ONLY valid JSON with the requested fields, no markdown or extra text.`,
-    });
+    if (field && fieldPrompts[field]) {
+      // Generate a single field
+      content.push({ type: 'text', text: `${preamble}\n\n${fieldPrompts[field]}` });
+    } else {
+      // Generate all missing fields as JSON (legacy/fallback)
+      const needName = !name;
+      const needTagline = !tagline;
+      content.push({
+        type: 'text',
+        text: `${preamble}\n\nGenerate the following as a JSON object:\n${needName ? '- "name": A short, evocative product name (2-4 words). Creative, boutique feel.\n' : ''}${needTagline ? '- "tagline": A brief poetic tagline (4-8 words).\n' : ''}- "description": A warm, poetic product description (2-3 sentences). Artisan and heartfelt tone.\n\nReturn ONLY valid JSON with the requested fields, no markdown or extra text.`,
+      });
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -57,7 +63,7 @@ Return ONLY valid JSON with the requested fields, no markdown or extra text.`,
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
+        max_tokens: field === 'description' ? 300 : 100,
         messages: [{ role: 'user', content }],
       }),
     });
@@ -69,12 +75,16 @@ Return ONLY valid JSON with the requested fields, no markdown or extra text.`,
     }
 
     const data = await response.json();
-    const raw = data.content?.[0]?.text?.trim() || '{}';
+    const raw = data.content?.[0]?.text?.trim() || '';
 
-    // Parse the JSON response, stripping markdown fences if present
+    if (field && fieldPrompts[field]) {
+      // Single field response — return the text directly
+      return NextResponse.json({ [field]: raw });
+    }
+
+    // Multi-field JSON response
     const cleaned = raw.replace(/^```json?\s*/, '').replace(/\s*```$/, '');
     const result = JSON.parse(cleaned);
-
     return NextResponse.json({
       name: result.name || '',
       tagline: result.tagline || '',
