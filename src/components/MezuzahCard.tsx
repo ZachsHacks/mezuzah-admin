@@ -46,7 +46,6 @@ export default function MezuzahCard({ mezuzah, onEdit, onDelete }: Props) {
           alt={mezuzah.name}
           className="max-h-44 max-w-full object-contain p-2"
           zoomLevel={3}
-          lensSize={120}
         />
       </div>
       <div className="p-4 space-y-3">

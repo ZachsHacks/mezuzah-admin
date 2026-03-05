@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Props {
   src: string;
@@ -8,7 +9,6 @@ interface Props {
   className?: string;
   style?: React.CSSProperties;
   zoomLevel?: number;
-  lensSize?: number;
 }
 
 export default function ImageMagnifier({
@@ -16,14 +16,14 @@ export default function ImageMagnifier({
   alt,
   className = '',
   style,
-  zoomLevel = 2.5,
-  lensSize = 150,
+  zoomLevel = 3,
 }: Props) {
   const [show, setShow] = useState(false);
-  const [pos, setPos] = useState({ x: 0, y: 0, bgX: 0, bgY: 0 });
+  const [bgPos, setBgPos] = useState({ x: 50, y: 50 });
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
   const imgRef = useRef<HTMLImageElement>(null);
 
-  function handleMouseMove(e: React.MouseEvent) {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const img = imgRef.current;
     if (!img) return;
 
@@ -31,48 +31,65 @@ export default function ImageMagnifier({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Background position for the zoomed image
-    const bgX = (x / rect.width) * 100;
-    const bgY = (y / rect.height) * 100;
+    setBgPos({
+      x: (x / rect.width) * 100,
+      y: (y / rect.height) * 100,
+    });
 
-    setPos({ x: e.clientX - rect.left, y: e.clientY - rect.top, bgX, bgY });
-  }
+    // Position the zoom panel to the right of the image
+    setPanelPos({
+      top: rect.top,
+      left: rect.right + 12,
+    });
+  }, []);
+
+  const handleMouseEnter = useCallback(() => setShow(true), []);
+  const handleMouseLeave = useCallback(() => setShow(false), []);
+
+  // Panel size matches image height for a balanced look
+  const panelSize = 320;
 
   return (
-    <div
-      className="relative"
-      style={{ display: 'inline-block' }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-      onMouseMove={handleMouseMove}
-    >
-      <img
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        className={className}
-        style={{ ...style, cursor: show ? 'none' : undefined }}
-      />
-      {show && (
-        <div
-          style={{
-            position: 'absolute',
-            left: pos.x - lensSize / 2,
-            top: pos.y - lensSize / 2,
-            width: lensSize,
-            height: lensSize,
-            borderRadius: '50%',
-            border: '2px solid rgba(255,255,255,0.8)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
-            backgroundImage: `url(${src})`,
-            backgroundSize: `${zoomLevel * 100}% ${zoomLevel * 100}%`,
-            backgroundPosition: `${pos.bgX}% ${pos.bgY}%`,
-            backgroundRepeat: 'no-repeat',
-            pointerEvents: 'none',
-            zIndex: 50,
-          }}
+    <>
+      <div
+        className="relative"
+        style={{ display: 'inline-block' }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onMouseMove={handleMouseMove}
+      >
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          className={className}
+          style={{ ...style, cursor: show ? 'crosshair' : undefined }}
         />
-      )}
-    </div>
+      </div>
+      {show && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: panelPos.top,
+              left: panelPos.left,
+              width: panelSize,
+              height: panelSize,
+              borderRadius: 12,
+              border: '2px solid rgba(255,255,255,0.9)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+              backgroundImage: `url(${src})`,
+              backgroundSize: `${zoomLevel * 100}% ${zoomLevel * 100}%`,
+              backgroundPosition: `${bgPos.x}% ${bgPos.y}%`,
+              backgroundRepeat: 'no-repeat',
+              backgroundColor: 'rgba(235,244,252,0.95)',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+          />,
+          document.body,
+        )
+      }
+    </>
   );
 }
