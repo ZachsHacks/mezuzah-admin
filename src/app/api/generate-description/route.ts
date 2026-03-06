@@ -29,10 +29,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Field-specific prompts
+    const noMarkdown = 'CRITICAL: Return ONLY plain text. Do NOT use any markdown formatting — no #, *, **, _, `, or headings. Do NOT repeat the product name at the start.';
     const fieldPrompts: Record<string, string> = {
-      name: 'Generate a short, evocative product name (2-4 words, like "The Garden Rose" or "Sapphire Dreams"). Creative, boutique feel. Return ONLY the name text, nothing else.',
-      tagline: 'Generate a brief poetic tagline (4-8 words, like "Blooming at Your Door" or "Where Earth Meets Sky"). Return ONLY the tagline text, nothing else.',
-      description: 'Write a warm, poetic product description (2-3 sentences). Artisan and heartfelt tone — like a small boutique, not a big retailer. Focus on beauty, craftsmanship, and spiritual significance. Return ONLY the description text, nothing else.',
+      name: `Generate a short, evocative product name (2-4 words, like "The Garden Rose" or "Sapphire Dreams"). Creative, boutique feel. ${noMarkdown} Return ONLY the name text.`,
+      tagline: `Generate a brief poetic tagline (4-8 words, like "Blooming at Your Door" or "Where Earth Meets Sky"). ${noMarkdown} Return ONLY the tagline text.`,
+      description: `Write a warm, poetic product description (2-3 sentences). Artisan and heartfelt tone — like a small boutique, not a big retailer. Focus on beauty, craftsmanship, and spiritual significance. ${noMarkdown}`,
     };
 
     const preamble = `You are writing product copy for "Made in Heaven Mezuzahs" — a collection of handcrafted, artistic mezuzah cases by Sorah Weiss. Each piece is unique and made with love.
@@ -77,18 +78,29 @@ ${imageUrl ? 'Use the image above to describe the visual details — colors, tex
     const data = await response.json();
     const raw = data.content?.[0]?.text?.trim() || '';
 
+    // Strip any markdown formatting the model might include
+    function stripMarkdown(text: string): string {
+      return text
+        .replace(/^#{1,6}\s+/gm, '')  // headings
+        .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')  // bold/italic
+        .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')  // underline bold/italic
+        .replace(/`([^`]+)`/g, '$1')  // inline code
+        .replace(/^\s*\n/gm, ' ')  // collapse blank lines
+        .replace(/\s{2,}/g, ' ')  // collapse multiple spaces
+        .trim();
+    }
+
     if (field && fieldPrompts[field]) {
-      // Single field response — return the text directly
-      return NextResponse.json({ [field]: raw });
+      return NextResponse.json({ [field]: stripMarkdown(raw) });
     }
 
     // Multi-field JSON response
     const cleaned = raw.replace(/^```json?\s*/, '').replace(/\s*```$/, '');
     const result = JSON.parse(cleaned);
     return NextResponse.json({
-      name: result.name || '',
-      tagline: result.tagline || '',
-      description: result.description || '',
+      name: stripMarkdown(result.name || ''),
+      tagline: stripMarkdown(result.tagline || ''),
+      description: stripMarkdown(result.description || ''),
     });
   } catch (err) {
     console.error('Generate description error:', err);
