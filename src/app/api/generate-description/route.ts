@@ -31,9 +31,9 @@ export async function POST(req: NextRequest) {
     // Field-specific prompts
     const noMarkdown = 'CRITICAL: Return ONLY plain text. Do NOT use any markdown formatting — no #, *, **, _, `, or headings. Do NOT repeat the product name at the start.';
     const fieldPrompts: Record<string, string> = {
-      name: `Generate a short, evocative product name (2-4 words, like "The Garden Rose" or "Sapphire Dreams"). Creative, boutique feel. ${noMarkdown} Return ONLY the name text.`,
-      tagline: `Generate a brief poetic tagline (4-8 words, like "Blooming at Your Door" or "Where Earth Meets Sky"). ${noMarkdown} Return ONLY the tagline text.`,
-      description: `Write a warm, poetic product description (2-3 sentences). Artisan and heartfelt tone — like a small boutique, not a big retailer. Focus on beauty, craftsmanship, and spiritual significance. ${noMarkdown}`,
+      name: `Generate a product name that is EXACTLY 2-3 words. No more than 3 words. Examples: "Golden Sunrise", "The Garden Rose", "Sapphire Dreams", "Ocean Whisper". Creative, boutique feel. ${noMarkdown} Return ONLY the name — nothing else.`,
+      tagline: `Generate a tagline that is EXACTLY one short line, 4-7 words max. Examples: "Blooming at Your Door", "Where Earth Meets Sky", "Grace in Every Detail". Keep it poetic but concise. ${noMarkdown} Return ONLY the tagline — nothing else.`,
+      description: `Write a product description in EXACTLY 2 short sentences. Keep it warm and heartfelt — like a small boutique, not a big retailer. Mention what makes this piece visually special and its spiritual significance. Be concise — no filler words, no long-winded prose. ${noMarkdown}`,
     };
 
     const preamble = `You are writing product copy for "Made in Heaven Mezuzahs" — a collection of handcrafted, artistic mezuzah cases by Sorah Weiss. Each piece is unique and made with love.
@@ -51,7 +51,7 @@ ${imageUrl ? 'Use the image above to describe the visual details — colors, tex
       const needTagline = !tagline;
       content.push({
         type: 'text',
-        text: `${preamble}\n\nGenerate the following as a JSON object:\n${needName ? '- "name": A short, evocative product name (2-4 words). Creative, boutique feel.\n' : ''}${needTagline ? '- "tagline": A brief poetic tagline (4-8 words).\n' : ''}- "description": A warm, poetic product description (2-3 sentences). Artisan and heartfelt tone.\n\nReturn ONLY valid JSON with the requested fields, no markdown or extra text.`,
+        text: `${preamble}\n\nGenerate the following as a JSON object:\n${needName ? '- "name": Product name, EXACTLY 2-3 words. E.g. "Golden Sunrise", "Sapphire Dreams".\n' : ''}${needTagline ? '- "tagline": One short poetic line, 4-7 words max. E.g. "Grace in Every Detail".\n' : ''}- "description": EXACTLY 2 short sentences. Warm, boutique tone. No filler.\n\nReturn ONLY valid JSON with the requested fields, no markdown or extra text.`,
       });
     }
 
@@ -64,7 +64,7 @@ ${imageUrl ? 'Use the image above to describe the visual details — colors, tex
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: field === 'description' ? 300 : 100,
+        max_tokens: field === 'description' ? 150 : 50,
         messages: [{ role: 'user', content }],
       }),
     });
