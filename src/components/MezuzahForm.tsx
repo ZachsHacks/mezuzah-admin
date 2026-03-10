@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { upload } from '@vercel/blob/client';
+import { createClient } from '@supabase/supabase-js';
 import { Mezuzah, ALL_CATEGORIES, SIZE_CATEGORIES } from '@/types/mezuzah';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -138,15 +138,28 @@ export default function MezuzahForm({ initial, onSave, onCancel, saving, sizeCat
       setPreviews((prev) => [...prev, { url: localUrl, isVid }]);
 
       try {
-        // File goes directly from browser → Vercel Blob (bypasses function payload limit)
-        const blob = await upload(file.name, file, {
-          access: 'public',
-          handleUploadUrl: '/api/upload',
+        // 1. Get a signed upload URL from our API route (server uses service role key)
+        const signRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'sign', filename: file.name, contentType: file.type }),
         });
+        if (!signRes.ok) throw new Error('Failed to get upload URL');
+        const { signedUrl, token, path, publicUrl } = await signRes.json();
+
+        // 2. Upload file directly from browser → Supabase Storage (no payload limit on our server)
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        );
+        const { error: uploadError } = await supabase.storage
+          .from('mezuzah-images')
+          .uploadToSignedUrl(path, token, file, { contentType: file.type });
+        if (uploadError) throw new Error(uploadError.message);
 
         // Build updated images list using the ref so we have the latest state across awaits
-        const updatedImages = [...formRef.current.images, blob.url];
-        setForm((f) => ({ ...f, images: [...f.images, blob.url] }));
+        const updatedImages = [...formRef.current.images, publicUrl];
+        setForm((f) => ({ ...f, images: [...f.images, publicUrl] }));
 
         // Auto-save draft to GitHub for cross-device persistence
         if (onAutoSave) {

@@ -1,38 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { cookies } from 'next/headers';
+import { getSupabaseAdmin, BUCKET, getPublicUrl } from '@/lib/supabase';
+import { randomUUID } from 'crypto';
 
-// Client-upload token server — the actual file goes directly from the browser
-// to Vercel Blob, so it never hits this function's payload limit.
+// POST /api/upload — two modes:
+// 1. { action: "sign", filename, contentType } → returns a signed upload URL
+// 2. { action: "signed-url-complete", path } → returns the public URL (confirmation step)
+
 export async function POST(req: NextRequest) {
   const cookieStore = await cookies();
   if (!cookieStore.get('admin_session')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json() as HandleUploadBody;
+  const body = await req.json();
+  const supabase = getSupabaseAdmin();
 
-  try {
-    const jsonResponse = await handleUpload({
-      body,
-      request: req,
-      onBeforeGenerateToken: async () => ({
-        allowedContentTypes: [
-          'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
-          'image/heic', 'image/heif',
-          'video/mp4', 'video/quicktime', 'video/webm', 'video/ogg', 'video/x-m4v',
-          'video/avif',
-        ],
-        maximumSizeInBytes: 200 * 1024 * 1024, // 200 MB
-        addRandomSuffix: true,
-      }),
-      onUploadCompleted: async () => {
-        // No post-processing needed
-      },
+  if (body.action === 'sign') {
+    const { filename, contentType } = body as { filename: string; contentType: string };
+    const ext = filename.split('.').pop() || 'bin';
+    const path = `${randomUUID()}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUploadUrl(path);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      signedUrl: data.signedUrl,
+      token: data.token,
+      path,
+      publicUrl: getPublicUrl(path),
     });
-
-    return NextResponse.json(jsonResponse);
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
+
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
