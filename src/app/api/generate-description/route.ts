@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     // Field-specific prompts
     const noMarkdown = 'CRITICAL: Return ONLY plain text. Do NOT use any markdown formatting — no #, *, **, _, `, or headings. Do NOT repeat the product name at the start.';
     const fieldPrompts: Record<string, string> = {
-      name: `Generate a product name that is EXACTLY 2-3 words. No more than 3 words. Examples: "Golden Sunrise", "The Garden Rose", "Sapphire Dreams", "Ocean Whisper". Creative, boutique feel. ${noMarkdown} Return ONLY the name — nothing else.`,
+      name: `Generate a short product name. MAXIMUM 3 words. Examples: "Golden Sunrise", "Garden Rose", "Sapphire Dreams". Creative, boutique feel. ${noMarkdown} Return ONLY the name, no quotes, no explanation.`,
       tagline: `Generate a tagline that is EXACTLY one short line, 4-7 words max. Examples: "Blooming at Your Door", "Where Earth Meets Sky", "Grace in Every Detail". Keep it poetic but concise. ${noMarkdown} Return ONLY the tagline — nothing else.`,
       description: `Write a product description in EXACTLY 2 short sentences. Keep it warm and heartfelt — like a small boutique, not a big retailer. Mention what makes this piece visually special and its spiritual significance. Be concise — no filler words, no long-winded prose. ${noMarkdown}`,
     };
@@ -64,7 +64,7 @@ ${imageUrl ? 'Use the image above to describe the visual details — colors, tex
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: field === 'description' ? 150 : 50,
+        max_tokens: field === 'name' ? 15 : field === 'tagline' ? 25 : 150,
         messages: [{ role: 'user', content }],
       }),
     });
