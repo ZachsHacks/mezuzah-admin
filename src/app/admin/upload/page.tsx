@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { upload } from '@vercel/blob/client';
+import { createClient } from '@supabase/supabase-js';
 
 type PhotoStatus = {
   id: string;
@@ -49,11 +49,24 @@ export default function UploadPage() {
       const photoId = newPhotos[i].id;
 
       try {
-        // Upload directly from browser to Vercel Blob
-        const blob = await upload(file.name, file, {
-          access: 'public',
-          handleUploadUrl: '/api/upload',
+        // Get signed upload URL from our API route
+        const signRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'sign', filename: file.name, contentType: file.type }),
         });
+        if (!signRes.ok) throw new Error('Failed to get upload URL');
+        const { token, path, publicUrl } = await signRes.json();
+
+        // Upload directly from browser to Supabase Storage
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        );
+        const { error: upErr } = await supabase.storage
+          .from('mezuzah-images')
+          .uploadToSignedUrl(path, token, file, { contentType: file.type });
+        if (upErr) throw new Error(upErr.message);
 
         // Fetch current drafts then prepend new one
         const currentRes = await fetch('/api/drafts');
@@ -63,7 +76,7 @@ export default function UploadPage() {
         const newDraft = {
           id: draftId,
           draft: true,
-          images: [blob.url],
+          images: [publicUrl],
           name: '',
           tagline: '',
           price: 0,
